@@ -1,4 +1,5 @@
 import bcrypt
+import os
 import uvicorn
 from authx import AuthX, AuthXConfig
 from fastapi import FastAPI, HTTPException, Response, Depends
@@ -10,7 +11,10 @@ from starlette.responses import RedirectResponse
 
 main = FastAPI()
 
-DATABASE_URL = "postgresql://postgres:batonSQL@localhost:5432/crm_db"
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:batonSQL@localhost:5432/crm_db"
+)
 
 engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -44,7 +48,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 config = AuthXConfig()
-config.JWT_SECRET_KEY = "SECRET_KEY"
+config.JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 config.JWT_ACCESS_COOKIE_NAME = "ACCESS_TOKEN"
 config.JWT_TOKEN_LOCATION = ["cookies"]
 
@@ -79,7 +83,6 @@ async def redirect_to_docs():
 
 @main.post('/setup_database')
 def setup_database():
-    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     return {'message': 'database setup successfully'}
 
@@ -106,7 +109,6 @@ def login(creds: UserLoginSchema, response: Response, db: Session = Depends(get_
     if not user or not verify_password(creds.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
 
-    # Создаем токен с реальным ID пользователя
     token = security.create_access_token(uid=str(user.id))
 
     response.set_cookie(
